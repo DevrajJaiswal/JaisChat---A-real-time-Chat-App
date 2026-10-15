@@ -8,3 +8,4 @@ coverage/
 *.log
 
 .DS_Store
+[REDACTED_FIREBASE_PROJECT_ID]-firebase-adminsdk-fbsvc-755b6dd60e.json
