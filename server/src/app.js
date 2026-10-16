@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { requireAuth } from "./middleware/requireAuth.js";
+import userRoutes from "./modules/users/user.routes.js";
 
 const app = express();
 
@@ -28,5 +29,7 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
     },
   });
 });
+
+app.use("/api/users", userRoutes);
 
 export default app;
