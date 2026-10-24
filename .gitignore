@@ -8,4 +8,5 @@ coverage/
 *.log
 
 .DS_Store
-[REDACTED_FIREBASE_PROJECT_ID]-firebase-adminsdk-fbsvc-755b6dd60e.json
+# Firebase Admin SDK private credentials
+/server/src/config/*-firebase-adminsdk-*.json

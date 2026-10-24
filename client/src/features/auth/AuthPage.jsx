@@ -13,6 +13,8 @@ import {
 } from "./user.service.js";
 
 import ProfileSetup from "./ProfileSetup.jsx";
+import UserDiscovery from "../users/UserDiscovery.jsx";
+import { logout } from "./auth.service.js";
 
 export default function AuthPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -24,6 +26,8 @@ export default function AuthPage() {
   const [savedProfile, setSavedProfile] = useState(null);
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [profileCheckFailed, setProfileCheckFailed] = useState(false);
+  const [activeConversation, setActiveConversation] = useState(null);
+  const [logoutError, setLogoutError] = useState("");
 
   const recaptchaReady = useRef(false);
 
@@ -109,7 +113,7 @@ export default function AuthPage() {
   return (
     <main className="mx-auto max-w-md p-6">
       <h1 className="mb-2 text-2xl font-bold">
-        ChatSphere
+        JaisChat
       </h1>
 
       <p className="mb-6 text-gray-600">
@@ -183,26 +187,71 @@ export default function AuthPage() {
         </form>
       )}
 
+
       {idToken && (
         <>
           {checkingProfile ? (
             <p className="mt-6 text-sm text-gray-600">
               Checking your profile...
             </p>
-          ) : savedProfile ? (
-            <section className="mt-6 rounded border p-4">
-              <h2 className="font-semibold text-green-700">
-                Welcome back!
-              </h2>
+          ) : savedProfile?.profile ? (
+            <>
+              <section className="mt-6 rounded border p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold text-green-700">
+                      Welcome, {savedProfile.profile.displayName}!
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      @{savedProfile.profile.username}
+                    </p>
+                  </div>
 
-              <p>
-                Username: {savedProfile.profile?.username}
-              </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setLogoutError("");
 
-              <p>
-                Display name: {savedProfile.profile?.displayName}
-              </p>
-            </section>
+                      try {
+                        await logout();
+                        setIdToken("");
+                        setSavedProfile(null);
+                        setConfirmationResult(null);
+                        setActiveConversation(null);
+                        setPhoneNumber("");
+                        setOtp("");
+                      } catch (err) {
+                        setLogoutError(err.message);
+                      }
+                    }}
+                    className="rounded border px-3 py-2 text-sm"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </section>
+
+              <UserDiscovery
+                onStartChat={async (conversation) => {
+                  setActiveConversation(conversation);
+                }}
+              />
+
+              {activeConversation && (
+                <section className="mt-4 rounded border p-4">
+                  <h2 className="font-semibold">
+                    Conversation ready
+                  </h2>
+                  <p className="mt-2 break-all text-sm text-gray-600">
+                    Conversation ID: {activeConversation.id}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Your direct conversation has been created or retrieved.
+                    The message screen will be added in a later step.
+                  </p>
+                </section>
+              )}
+            </>
           ) : (
             <ProfileSetup
               onSaved={async () => {

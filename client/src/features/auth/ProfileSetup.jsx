@@ -38,7 +38,7 @@ export default function ProfileSetup({ onSaved }) {
       </h2>
 
       <p className="mb-6 text-gray-600">
-        Choose how other people will see you on ChatSphere.
+        Choose how other people will see you on JaisChat.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
