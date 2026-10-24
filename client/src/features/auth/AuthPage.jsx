@@ -15,6 +15,7 @@ import {
 import ProfileSetup from "./ProfileSetup.jsx";
 import UserDiscovery from "../users/UserDiscovery.jsx";
 import { logout } from "./auth.service.js";
+import ConversationView from "../conversations/ConversationView.jsx";
 
 export default function AuthPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -187,7 +188,6 @@ export default function AuthPage() {
         </form>
       )}
 
-
       {idToken && (
         <>
           {checkingProfile ? (
@@ -231,26 +231,21 @@ export default function AuthPage() {
                 </div>
               </section>
 
-              <UserDiscovery
-                onStartChat={async (conversation) => {
-                  setActiveConversation(conversation);
-                }}
-              />
 
-              {activeConversation && (
-                <section className="mt-4 rounded border p-4">
-                  <h2 className="font-semibold">
-                    Conversation ready
-                  </h2>
-                  <p className="mt-2 break-all text-sm text-gray-600">
-                    Conversation ID: {activeConversation.id}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Your direct conversation has been created or retrieved.
-                    The message screen will be added in a later step.
-                  </p>
-                </section>
+              {activeConversation ? (
+                <ConversationView
+                  conversation={activeConversation}
+                  currentUserId={savedProfile.id}
+                  onBack={() => setActiveConversation(null)}
+                />
+              ) : (
+                <UserDiscovery
+                  onStartChat={async (conversation) => {
+                    setActiveConversation(conversation);
+                  }}
+                />
               )}
+
             </>
           ) : (
             <ProfileSetup
