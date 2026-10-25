@@ -2,11 +2,24 @@
 import { useState } from "react";
 import { saveMyProfile } from "./user.service.js";
 
-export default function ProfileSetup({ onSaved }) {
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [about, setAbout] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
+export default function ProfileSetup({
+  onSaved,
+  initialProfile = null,
+}) {
+  const isEditing = Boolean(initialProfile);
+
+  const [username, setUsername] = useState(
+    initialProfile?.username ?? ""
+  );
+  const [displayName, setDisplayName] = useState(
+    initialProfile?.displayName ?? ""
+  );
+  const [about, setAbout] = useState(
+    initialProfile?.about ?? ""
+  );
+  const [avatarUrl, setAvatarUrl] = useState(
+    initialProfile?.avatarUrl ?? ""
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -23,9 +36,9 @@ export default function ProfileSetup({ onSaved }) {
         avatarUrl: avatarUrl.trim() || null,
       });
 
-      onSaved(result);
+      await onSaved(result);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Unable to save profile.");
     } finally {
       setLoading(false);
     }
@@ -34,11 +47,13 @@ export default function ProfileSetup({ onSaved }) {
   return (
     <section className="mx-auto max-w-md p-6">
       <h2 className="mb-2 text-2xl font-bold">
-        Set up your profile
+        {isEditing ? "Edit your profile" : "Set up your profile"}
       </h2>
 
       <p className="mb-6 text-gray-600">
-        Choose how other people will see you on JaisChat.
+        {isEditing
+          ? "Update how other people see you on JaisChat."
+          : "Choose how other people will see you on JaisChat."}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -47,11 +62,13 @@ export default function ProfileSetup({ onSaved }) {
           <input
             className="w-full rounded border p-2"
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            minLength={3}
+            onChange={(event) =>
+              setUsername(event.target.value)
+            }
+            minLength={5}
             maxLength={30}
             pattern="[A-Za-z0-9_]+"
-            title="Use letters, numbers, and underscores only."
+            title="Use 5–30 letters, numbers, or underscores."
             required
           />
         </label>
@@ -61,7 +78,10 @@ export default function ProfileSetup({ onSaved }) {
           <input
             className="w-full rounded border p-2"
             value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
+            onChange={(event) =>
+              setDisplayName(event.target.value)
+            }
+            minLength={1}
             maxLength={80}
             required
           />
@@ -72,19 +92,25 @@ export default function ProfileSetup({ onSaved }) {
           <textarea
             className="w-full rounded border p-2"
             value={about}
-            onChange={(event) => setAbout(event.target.value)}
+            onChange={(event) =>
+              setAbout(event.target.value)
+            }
             maxLength={150}
             rows={3}
           />
         </label>
 
         <label className="block">
-          <span className="mb-1 block">Avatar URL (optional)</span>
+          <span className="mb-1 block">
+            Avatar URL (optional)
+          </span>
           <input
             className="w-full rounded border p-2"
             type="url"
             value={avatarUrl}
-            onChange={(event) => setAvatarUrl(event.target.value)}
+            onChange={(event) =>
+              setAvatarUrl(event.target.value)
+            }
             placeholder="https://example.com/avatar.jpg"
           />
         </label>
@@ -94,8 +120,23 @@ export default function ProfileSetup({ onSaved }) {
           disabled={loading}
           className="w-full rounded bg-blue-600 p-2 text-white disabled:opacity-50"
         >
-          {loading ? "Saving..." : "Save Profile"}
+          {loading
+            ? "Saving..."
+            : isEditing
+              ? "Save Changes"
+              : "Save Profile"}
         </button>
+
+        {isEditing && (
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => onSaved(null, { cancel: true })}
+            className="w-full rounded border p-2 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        )}
       </form>
 
       {error && (

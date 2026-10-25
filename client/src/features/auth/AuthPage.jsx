@@ -37,6 +37,7 @@ export default function AuthPage() {
   const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [activeConversation, setActiveConversation] = useState(null);
   const [logoutError, setLogoutError] = useState("");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const recaptchaReady = useRef(false);
 
@@ -200,18 +201,20 @@ export default function AuthPage() {
     setProfileLoadFailed(false);
 
     try {
-      await syncCurrentUser();
-
       const result = await getCurrentUser();
 
       setSavedProfile(
         result.user?.profile ? result.user : null
       );
+
+      return true;
     } catch (err) {
       setProfileLoadFailed(true);
       setError(
         err.message || "Unable to load your profile."
       );
+
+      return false;
     } finally {
       setCheckingProfile(false);
     }
@@ -275,8 +278,18 @@ export default function AuthPage() {
     }
   }
 
-  async function handleProfileSaved() {
-    await refreshCurrentProfile();
+  async function handleProfileSaved(_result, options = {}) {
+    if (options.cancel) {
+      setIsEditingProfile(false);
+      setError("");
+      return;
+    }
+
+    const refreshed = await refreshCurrentProfile();
+
+    if (refreshed) {
+      setIsEditingProfile(false);
+    }
   }
 
   return (
@@ -407,16 +420,29 @@ export default function AuthPage() {
                   >
                     Sign out
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError("");
+                      setIsEditingProfile(true);
+                    }}
+                    className="rounded border px-3 py-2 text-sm"
+                  >
+                    Edit Profile
+                  </button>
                 </div>
               </section>
 
-              {activeConversation ? (
+              {isEditingProfile ? (
+                <ProfileSetup
+                  initialProfile={savedProfile.profile}
+                  onSaved={handleProfileSaved}
+                />
+              ) : activeConversation ? (
                 <ConversationView
                   conversation={activeConversation}
                   currentUserId={savedProfile.id}
-                  onBack={() =>
-                    setActiveConversation(null)
-                  }
+                  onBack={() => setActiveConversation(null)}
                 />
               ) : (
                 <UserDiscovery
