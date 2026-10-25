@@ -293,188 +293,230 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="mb-2 text-2xl font-bold">
-        JaisChat
-      </h1>
+    <main className="min-h-screen bg-slate-100 text-slate-900">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col px-3 py-4 sm:px-6 sm:py-6">
+        <h1 className="mb-2 text-2xl font-bold">
+          JaisChat
+        </h1>
 
-      {!checkingAuth && !idToken && (
-        <p className="mb-6 text-gray-600">
-          Sign in with your phone number
-        </p>
-      )}
+        {!checkingAuth && !idToken && (
+          <p className="mb-6 text-gray-600">
+            Sign in with your phone number
+          </p>
+        )}
 
-      {checkingAuth && (
-        <p className="mt-6 text-sm text-gray-600">
-          Restoring your session...
-        </p>
-      )}
+        {checkingAuth && (
+          <p className="mt-6 text-sm text-gray-600">
+            Restoring your session...
+          </p>
+        )}
 
-      {!checkingAuth && !idToken && !confirmationResult && (
-        <form
-          onSubmit={handleSendOtp}
-          className="space-y-4"
-        >
-          <label className="block">
-            <span className="mb-1 block">
-              Phone number
-            </span>
-
-            <input
-              className="w-full rounded border p-2"
-              type="tel"
-              placeholder="+91XXXXXXXXXX"
-              value={phoneNumber}
-              onChange={(event) =>
-                setPhoneNumber(event.target.value)
-              }
-              required
-            />
-          </label>
-
-          <div id="recaptcha-container" />
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded bg-blue-600 p-2 text-white disabled:opacity-50"
+        {!checkingAuth && !idToken && !confirmationResult && (
+          <form
+            onSubmit={handleSendOtp}
+            className="space-y-4"
           >
-            {loading ? "Sending..." : "Send OTP"}
-          </button>
-        </form>
-      )}
+            <label className="block">
+              <span className="mb-1 block">
+                Phone number
+              </span>
 
-      {!checkingAuth && !idToken && confirmationResult && (
-        <form
-          onSubmit={handleVerifyOtp}
-          className="space-y-4"
-        >
-          <label className="block">
-            <span className="mb-1 block">
-              Verification code
-            </span>
+              <input
+                className="w-full rounded border p-2"
+                type="tel"
+                placeholder="+91XXXXXXXXXX"
+                value={phoneNumber}
+                onChange={(event) =>
+                  setPhoneNumber(event.target.value)
+                }
+                required
+              />
+            </label>
 
-            <input
-              className="w-full rounded border p-2"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={otp}
-              onChange={(event) =>
-                setOtp(event.target.value)
-              }
-              required
-            />
-          </label>
+            <div id="recaptcha-container" />
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded bg-blue-600 p-2 text-white disabled:opacity-50"
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded bg-brand p-2 text-white disabled:opacity-50"
+            >
+              {loading ? "Sending..." : "Send OTP"}
+            </button>
+          </form>
+        )}
+
+        {!checkingAuth && !idToken && confirmationResult && (
+          <form
+            onSubmit={handleVerifyOtp}
+            className="space-y-4"
           >
-            {loading ? "Verifying..." : "Verify OTP"}
-          </button>
-        </form>
-      )}
+            <label className="block">
+              <span className="mb-1 block">
+                Verification code
+              </span>
 
-      {idToken && (
-        <>
-          {checkingProfile ? (
-            <p className="mt-6 text-sm text-gray-600">
-              Checking your profile...
-            </p>
-          ) : profileLoadFailed ? (
-            <section className="mt-6 rounded border p-4">
-              <p className="text-sm text-red-600">
-                Your session is active, but your profile
-                could not be loaded.
+              <input
+                className="w-full rounded border p-2"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={otp}
+                onChange={(event) =>
+                  setOtp(event.target.value)
+                }
+                required
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded bg-brand p-2 text-white disabled:opacity-50"
+            >
+              {loading ? "Verifying..." : "Verify OTP"}
+            </button>
+          </form>
+        )}
+
+        {idToken && (
+          <>
+            {checkingProfile ? (
+              <p className="mt-6 text-sm text-gray-600">
+                Checking your profile...
               </p>
-
-              <button
-                type="button"
-                onClick={refreshCurrentProfile}
-                className="mt-3 rounded border px-3 py-2 text-sm"
-              >
-                Retry
-              </button>
-            </section>
-          ) : savedProfile?.profile ? (
-            <>
+            ) : profileLoadFailed ? (
               <section className="mt-6 rounded border p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="font-semibold text-green-700">
-                      Welcome,{" "}
-                      {savedProfile.profile.displayName}!
-                    </h2>
+                <p className="text-sm text-red-600">
+                  Your session is active, but your profile
+                  could not be loaded.
+                </p>
 
-                    <p className="text-sm text-gray-600">
-                      @{savedProfile.profile.username}
-                    </p>
-                  </div>
+                <button
+                  type="button"
+                  onClick={refreshCurrentProfile}
+                  className="mt-3 rounded border px-3 py-2 text-sm"
+                >
+                  Retry
+                </button>
+              </section>
 
+            ) : savedProfile?.profile ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                {/* Profile and account actions */}
+                <header className="mb-4 flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <button
                     type="button"
-                    onClick={handleLogout}
-                    className="rounded border px-3 py-2 text-sm"
-                  >
-                    Sign out
-                  </button>
-                  <button
-                    type="button"
+                    // title="Edit your profile"
+                    aria-label="Edit your profile"
                     onClick={() => {
                       setError("");
                       setIsEditingProfile(true);
                     }}
-                    className="rounded border px-3 py-2 text-sm"
+                    className="group relative shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                   >
-                    Edit Profile
+                    {savedProfile.profile.avatarUrl ? (
+                      <img
+                        src={savedProfile.profile.avatarUrl}
+                        alt=""
+                        className="h-11 w-11 rounded-full object-cover transition group-hover:opacity-75"
+                      />
+                    ) : (
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand-hover transition group-hover:bg-brand-border">
+                        {savedProfile.profile.displayName
+                          ?.charAt(0)
+                          ?.toUpperCase() || "U"}
+                      </span>
+                    )}
+
+                    <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-text-primary px-2 py-1 text-xs text-white opacity-0 shadow transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                      Edit profile
+                    </span>
                   </button>
-                </div>
-              </section>
 
-              {isEditingProfile ? (
-                <ProfileSetup
-                  initialProfile={savedProfile.profile}
-                  onSaved={handleProfileSaved}
-                />
-              ) : activeConversation ? (
-                <ConversationView
-                  conversation={activeConversation}
-                  currentUserId={savedProfile.id}
-                  onBack={() => setActiveConversation(null)}
-                />
-              ) : (
-                <UserDiscovery
-                  onStartChat={(conversation) => {
-                    setActiveConversation(conversation);
-                  }}
-                />
-              )}
-            </>
-          ) : (
-            <ProfileSetup onSaved={handleProfileSaved} />
-          )}
-        </>
-      )}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="rounded-xl bg-brand px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-hover"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                </header>
 
-      {error && (
-        <p
-          role="alert"
-          className="mt-4 break-words text-red-600"
-        >
-          {error}
-        </p>
-      )}
+                {isEditingProfile ? (
+                  <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-200 bg-white">
+                    <ProfileSetup
+                      initialProfile={savedProfile.profile}
+                      onSaved={handleProfileSaved}
+                    />
+                  </div>
+                ) : (
+                  <div className="grid h-[calc(100dvh-12rem)] min-h-[400px] grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+                    {/* People/search panel: hide on mobile while a chat is open */}
+                    <div
+                      className={`min-h-0 overflow-hidden ${activeConversation ? "hidden md:flex" : "flex"
+                        } flex-col border-slate-200 md:border-r`}
+                    >
+                      <UserDiscovery
+                        onStartChat={(conversation) => {
+                          setActiveConversation(conversation);
+                        }}
+                      />
+                    </div>
 
-      {logoutError && (
-        <p
-          role="alert"
-          className="mt-4 break-words text-red-600"
-        >
-          {logoutError}
-        </p>
-      )}
-    </main>
-  );
+                    {/* Chat panel: full-screen on mobile, right-hand panel on desktop */}
+                    <div
+                      className={`min-h-0 overflow-hidden ${activeConversation ? "flex" : "hidden md:flex"
+                        } flex-col`}
+                    >
+                      {activeConversation ? (
+                        <ConversationView
+                          conversation={activeConversation}
+                          currentUserId={savedProfile.id}
+                          onBack={() => setActiveConversation(null)}
+                        />
+                      ) : (
+                        <div className="flex h-full flex-col items-center justify-center bg-slate-50 p-8 text-center">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-soft text-3xl">
+                            💬
+                          </div>
+                          <h2 className="mt-5 text-xl font-semibold text-slate-800">
+                            Welcome to JaisChat
+                          </h2>
+                          <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+                            Search for someone on the left to start a conversation.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <ProfileSetup onSaved={handleProfileSaved} />
+            )}
+
+          </>
+        )}
+
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 break-words text-red-600"
+          >
+            {error}
+          </p>
+        )}
+
+        {logoutError && (
+          <p
+            role="alert"
+            className="mt-4 break-words text-red-600"
+          >
+            {logoutError}
+          </p>
+        )}
+      </div>
+    </main>);
 }
