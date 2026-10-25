@@ -18,28 +18,28 @@ export default function ConversationView({
     const [error, setError] = useState("");
 
     const bottomRef = useRef(null);
-
     const conversationId = conversation?.id;
+
     const otherMember = conversation?.members?.find(
         (member) => member.userId !== currentUserId
     );
 
-    const otherProfile = otherMember?.user?.profile;
-    const otherDisplayName = otherProfile?.displayName || "Conversation";
-    const otherUsername = otherProfile?.username;
-    const otherAvatarUrl = otherProfile?.avatarUrl;
+    const profile = otherMember?.user?.profile;
+    const displayName =
+        profile?.displayName || profile?.username || "Conversation";
 
     const loadMessages = useCallback(async () => {
-        if (!conversationId) return;
+        if (!conversationId) {
+            setMessages([]);
+            setLoading(false);
+            return;
+        }
 
         setLoading(true);
         setError("");
 
         try {
-            const result = await getConversationMessages(
-                conversationId
-            );
-
+            const result = await getConversationMessages(conversationId);
             setMessages(result.messages ?? []);
         } catch (err) {
             setError(err.message || "Unable to load messages.");
@@ -53,64 +53,43 @@ export default function ConversationView({
     }, [loadMessages]);
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({
-            behavior: "smooth",
-        });
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
     useEffect(() => {
-        if (!conversationId) {
-            return;
-        }
+        if (!conversationId) return;
 
         let cancelled = false;
         let activeSocket;
         let handleNewMessage;
 
-        async function subscribeToMessages() {
+        async function subscribe() {
             try {
                 const socket = await connectSocket();
 
-                // The component may have changed conversations
-                // while the socket was connecting.
-                if (cancelled) {
-                    return;
-                }
+                if (cancelled) return;
 
                 activeSocket = socket;
 
-                // Listen for new messages in this conversation.
                 handleNewMessage = (message) => {
-                    if (message.conversationId !== conversationId) {
-                        return;
-                    }
+                    if (message.conversationId !== conversationId) return;
 
-                    setMessages((previousMessages) => {
-                        const alreadyExists = previousMessages.some(
-                            (item) => item.id === message.id
-                        );
-
-                        if (alreadyExists) {
-                            return previousMessages;
+                    setMessages((previous) => {
+                        if (previous.some((item) => item.id === message.id)) {
+                            return previous;
                         }
 
-                        return [...previousMessages, message];
+                        return [...previous, message];
                     });
                 };
 
-                // Register the listener before joining the room.
                 socket.on("message:new", handleNewMessage);
 
-                // Ask the backend to verify membership and join the room.
                 socket.emit(
                     "conversation:join",
                     { conversationId },
                     (result) => {
-                        if (cancelled) {
-                            return;
-                        }
-
-                        if (!result?.success) {
+                        if (!cancelled && !result?.success) {
                             console.error(
                                 "Unable to join conversation:",
                                 result?.message
@@ -118,31 +97,23 @@ export default function ConversationView({
                         }
                     }
                 );
-            } catch (error) {
+            } catch (err) {
                 if (!cancelled) {
-                    console.error(
-                        "Unable to subscribe to messages:",
-                        error.message
-                    );
+                    console.error("Unable to subscribe to messages:", err);
                 }
             }
         }
 
-        subscribeToMessages();
+        subscribe();
 
         return () => {
             cancelled = true;
 
             if (activeSocket) {
-                // Remove only this component's listener.
                 if (handleNewMessage) {
-                    activeSocket.off(
-                        "message:new",
-                        handleNewMessage
-                    );
+                    activeSocket.off("message:new", handleNewMessage);
                 }
 
-                // Leave the room when switching conversations.
                 if (activeSocket.connected) {
                     activeSocket.emit("conversation:leave", {
                         conversationId,
@@ -157,7 +128,7 @@ export default function ConversationView({
 
         const text = content.trim();
 
-        if (!text || sending) return;
+        if (!text || sending || !conversationId) return;
 
         if (text.length > 4000) {
             setError("Messages cannot exceed 4000 characters.");
@@ -167,24 +138,19 @@ export default function ConversationView({
         setSending(true);
         setError("");
 
-        // Keep this ID for retries of this same message.
-        const clientMessageId = crypto.randomUUID();
-
         try {
             const result = await sendConversationMessage(
                 conversationId,
                 text,
-                clientMessageId
+                crypto.randomUUID()
             );
 
-            setMessages((current) => {
-                const alreadyExists = current.some(
-                    (message) => message.id === result.message.id
-                );
+            setMessages((previous) => {
+                if (previous.some((item) => item.id === result.message.id)) {
+                    return previous;
+                }
 
-                return alreadyExists
-                    ? current
-                    : [...current, result.message];
+                return [...previous, result.message];
             });
 
             setContent("");
@@ -195,53 +161,39 @@ export default function ConversationView({
         }
     }
 
-    if (!conversationId) {
-        return (
-            <section className="p-6">
-                <p role="alert">No conversation selected.</p>
-                <button onClick={onBack} className="mt-3 underline">
-                    Back
-                </button>
-            </section>
-        );
-    }
-
     return (
         <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-
-            <header className="z-10 flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-5">
+            <header className="flex h-[66px] shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4">
                 <button
                     type="button"
                     onClick={onBack}
                     aria-label="Back to conversations"
-                    className="rounded-full p-2 text-slate-600 transition hover:bg-brand-soft hover:text-brand"
+                    className="rounded-full p-2 text-slate-600 transition hover:bg-brand-soft hover:text-brand md:hidden"
                 >
                     <span aria-hidden="true">←</span>
                 </button>
 
-                {otherAvatarUrl ? (
+                {profile?.avatarUrl ? (
                     <img
-                        src={otherAvatarUrl}
+                        src={profile.avatarUrl}
                         alt=""
-                        className="h-10 w-10 shrink-0 rounded-full bg-slate-100 object-cover"
+                        className="h-10 w-10 shrink-0 rounded-full object-cover"
                     />
                 ) : (
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand-hover">
-                        {otherDisplayName.charAt(0).toUpperCase()}
+                        {displayName.charAt(0).toUpperCase()}
                     </div>
                 )}
 
                 <div className="min-w-0 flex-1">
                     <h2 className="truncate text-sm font-semibold text-text-primary">
-                        {otherDisplayName}
+                        {displayName}
                     </h2>
-
                     <p className="truncate text-xs text-text-secondary">
-                        {otherUsername ? `@${otherUsername}` : "JaisChat"}
+                        {profile?.username ? `@${profile.username}` : "JaisChat"}
                     </p>
                 </div>
             </header>
-
 
             <div
                 className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#efeae2] p-3 sm:p-5"
@@ -258,23 +210,23 @@ export default function ConversationView({
                     </p>
                 ) : (
                     messages.map((message) => {
-                        const isMine =
-                            message.senderId === currentUserId;
+                        const isMine = message.senderId === currentUserId;
 
                         return (
                             <div
                                 key={message.id}
-                                className={`flex ${isMine ? "justify-end" : "justify-start"
-                                    }`}
+                                className={`flex ${
+                                    isMine ? "justify-end" : "justify-start"
+                                }`}
                             >
                                 <article
-                                    className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 shadow-sm sm:max-w-[75%] ${isMine
+                                    className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 shadow-sm sm:max-w-[75%] ${
+                                        isMine
                                             ? "rounded-br-md bg-brand-soft text-slate-900"
                                             : "rounded-bl-md bg-white text-slate-900"
-                                        }`}
+                                    }`}
                                 >
                                     <p>{message.content}</p>
-
                                     <time
                                         className="mt-1 block text-right text-[11px] text-slate-500"
                                         dateTime={message.createdAt}
@@ -322,7 +274,7 @@ export default function ConversationView({
                     aria-label="Message"
                     maxLength={4000}
                     rows={2}
-                    className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-brand bg-white px-4 py-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                    className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-brand bg-white px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-brand-soft"
                 />
 
                 <button

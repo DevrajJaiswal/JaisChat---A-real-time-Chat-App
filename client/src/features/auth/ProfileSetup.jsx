@@ -118,7 +118,7 @@ export default function ProfileSetup({
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded bg-blue-600 p-2 text-white disabled:opacity-50"
+          className="w-full rounded bg-brand hover:bg-brand-hover p-2 text-white disabled:opacity-50"
         >
           {loading
             ? "Saving..."

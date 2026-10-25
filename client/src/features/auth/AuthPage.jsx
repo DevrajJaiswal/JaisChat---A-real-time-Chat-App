@@ -1,7 +1,8 @@
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../config/firebase.js";
+import ConversationList from "../conversations/ConversationList.jsx";
 
 import {
   connectSocket,
@@ -21,7 +22,6 @@ import {
 } from "./user.service.js";
 
 import ProfileSetup from "./ProfileSetup.jsx";
-import UserDiscovery from "../users/UserDiscovery.jsx";
 import ConversationView from "../conversations/ConversationView.jsx";
 
 export default function AuthPage() {
@@ -38,6 +38,7 @@ export default function AuthPage() {
   const [activeConversation, setActiveConversation] = useState(null);
   const [logoutError, setLogoutError] = useState("");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const recaptchaReady = useRef(false);
 
@@ -269,6 +270,11 @@ export default function AuthPage() {
       setPhoneNumber("");
       setOtp("");
       setError("");
+      if (savedProfile?.id) {
+        sessionStorage.removeItem(
+          `jaischat:lastConversation:${savedProfile.id}`
+        );
+      }
       setSavedProfile(null);
       setIdToken("");
       setProfileLoadFailed(false);
@@ -291,6 +297,29 @@ export default function AuthPage() {
       setIsEditingProfile(false);
     }
   }
+
+  const handleConversationsLoaded = useCallback(
+    (conversations) => {
+      if (!savedProfile?.id) return;
+
+      const storageKey = `jaischat:lastConversation:${savedProfile.id}`;
+      const savedConversationId = sessionStorage.getItem(storageKey);
+
+      if (!savedConversationId) return;
+
+      const savedConversation = conversations.find(
+        (conversation) => conversation.id === savedConversationId
+      );
+
+      if (savedConversation) {
+        setActiveConversation((current) => current ?? savedConversation);
+      } else {
+        sessionStorage.removeItem(storageKey);
+        setActiveConversation(null);
+      }
+    },
+    [savedProfile?.id]
+  );
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
@@ -453,17 +482,29 @@ export default function AuthPage() {
                   </div>
                 ) : (
                   <div className="grid h-[calc(100dvh-12rem)] min-h-[400px] grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
-                    {/* People/search panel: hide on mobile while a chat is open */}
+
+                    {/* Conversation list / user discovery sidebar */}
                     <div
                       className={`min-h-0 overflow-hidden ${activeConversation ? "hidden md:flex" : "flex"
                         } flex-col border-slate-200 md:border-r`}
                     >
-                      <UserDiscovery
-                        onStartChat={(conversation) => {
+                      <ConversationList
+                        currentUserId={savedProfile.id}
+                        activeConversationId={activeConversation?.id}
+                        onConversationsLoaded={handleConversationsLoaded}
+                        onSearchFocus={() => setIsSearchFocused(true)}
+                        onSelectConversation={(conversation) => {
                           setActiveConversation(conversation);
+                          setIsSearchFocused(false);
+
+                          sessionStorage.setItem(
+                            `jaischat:lastConversation:${savedProfile.id}`,
+                            conversation.id
+                          );
                         }}
                       />
                     </div>
+
 
                     {/* Chat panel: full-screen on mobile, right-hand panel on desktop */}
                     <div
@@ -484,9 +525,11 @@ export default function AuthPage() {
                           <h2 className="mt-5 text-xl font-semibold text-slate-800">
                             Welcome to JaisChat
                           </h2>
-                          <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
-                            Search for someone on the left to start a conversation.
-                          </p>
+                          {isSearchFocused && (
+                            <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+                              Select a conversation or start a new chat to connect with someone.
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
