@@ -4,6 +4,7 @@ import {
     getConversationMessages,
     sendConversationMessage,
 } from "./message.service.js";
+import { connectSocket } from "../../lib/socket.js";
 
 export default function ConversationView({
     conversation,
@@ -48,6 +49,100 @@ export default function ConversationView({
             behavior: "smooth",
         });
     }, [messages]);
+
+    useEffect(() => {
+        if (!conversationId) {
+            return;
+        }
+
+        let cancelled = false;
+        let activeSocket;
+        let handleNewMessage;
+
+        async function subscribeToMessages() {
+            try {
+                const socket = await connectSocket();
+
+                // The component may have changed conversations
+                // while the socket was connecting.
+                if (cancelled) {
+                    return;
+                }
+
+                activeSocket = socket;
+
+                // Listen for new messages in this conversation.
+                handleNewMessage = (message) => {
+                    if (message.conversationId !== conversationId) {
+                        return;
+                    }
+
+                    setMessages((previousMessages) => {
+                        const alreadyExists = previousMessages.some(
+                            (item) => item.id === message.id
+                        );
+
+                        if (alreadyExists) {
+                            return previousMessages;
+                        }
+
+                        return [...previousMessages, message];
+                    });
+                };
+
+                // Register the listener before joining the room.
+                socket.on("message:new", handleNewMessage);
+
+                // Ask the backend to verify membership and join the room.
+                socket.emit(
+                    "conversation:join",
+                    { conversationId },
+                    (result) => {
+                        if (cancelled) {
+                            return;
+                        }
+
+                        if (!result?.success) {
+                            console.error(
+                                "Unable to join conversation:",
+                                result?.message
+                            );
+                        }
+                    }
+                );
+            } catch (error) {
+                if (!cancelled) {
+                    console.error(
+                        "Unable to subscribe to messages:",
+                        error.message
+                    );
+                }
+            }
+        }
+
+        subscribeToMessages();
+
+        return () => {
+            cancelled = true;
+
+            if (activeSocket) {
+                // Remove only this component's listener.
+                if (handleNewMessage) {
+                    activeSocket.off(
+                        "message:new",
+                        handleNewMessage
+                    );
+                }
+
+                // Leave the room when switching conversations.
+                if (activeSocket.connected) {
+                    activeSocket.emit("conversation:leave", {
+                        conversationId,
+                    });
+                }
+            }
+        };
+    }, [conversationId]);
 
     async function handleSubmit(event) {
         event.preventDefault();
@@ -148,16 +243,16 @@ export default function ConversationView({
                             >
                                 <article
                                     className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2 ${isMine
-                                            ? "bg-blue-600 text-white"
-                                            : "border bg-white text-gray-900"
+                                        ? "bg-blue-600 text-white"
+                                        : "border bg-white text-gray-900"
                                         }`}
                                 >
                                     <p>{message.content}</p>
 
                                     <time
                                         className={`mt-1 block text-right text-xs ${isMine
-                                                ? "text-blue-100"
-                                                : "text-gray-500"
+                                            ? "text-blue-100"
+                                            : "text-gray-500"
                                             }`}
                                         dateTime={message.createdAt}
                                     >

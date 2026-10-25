@@ -1,5 +1,9 @@
 
 import { useEffect, useRef, useState } from "react";
+import {
+  connectSocket,
+  disconnectSocket,
+} from "../../lib/socket.js";
 
 import {
   sendOtp,
@@ -55,6 +59,58 @@ export default function AuthPage() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!idToken) {
+      return;
+    }
+
+    let cancelled = false;
+    let activeSocket;
+
+    async function initializeSocket() {
+      try {
+        const socket = await connectSocket();
+
+        if (cancelled) {
+          return;
+        }
+
+        activeSocket = socket;
+
+        const handleConnect = () => {
+          console.log("JaisChat socket connected:", socket.id);
+        };
+
+        const handleConnectError = (error) => {
+          console.error("Socket connection failed:", error.message);
+        };
+
+        socket.on("connect", handleConnect);
+        socket.on("connect_error", handleConnectError);
+
+        // The socket might already be connected.
+        if (socket.connected) {
+          handleConnect();
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Unable to initialize socket:", error.message);
+        }
+      }
+    }
+
+    initializeSocket();
+
+    return () => {
+      cancelled = true;
+
+      if (activeSocket) {
+        activeSocket.off("connect");
+        activeSocket.off("connect_error");
+      }
+    };
+  }, [idToken]);
 
   async function handleSendOtp(event) {
     event.preventDefault();
@@ -213,6 +269,7 @@ export default function AuthPage() {
                       setLogoutError("");
 
                       try {
+                        disconnectSocket();
                         await logout();
                         setIdToken("");
                         setSavedProfile(null);

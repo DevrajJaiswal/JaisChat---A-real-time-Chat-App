@@ -3,6 +3,7 @@ import {
   sendMessage,
   getConversationMessages,
 } from "./message.service.js";
+import { getIO } from "../../socket/socket.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -26,16 +27,28 @@ export async function createMessage(req, res) {
   }
 
   try {
-    const message = await sendMessage(
-      req.auth.uid,
-      conversationId,
-      { content, clientMessageId }
-    );
+
+    const message = await sendMessage(req.auth.uid, conversationId, {
+      content,
+      clientMessageId,
+    });
+
+    // Broadcast only after the database operation succeeds.
+    try {
+      getIO()
+        .to(`conversation:${conversationId}`)
+        .emit("message:new", message);
+    } catch (error) {
+      // The message is already saved. Don't turn a successful
+      // database operation into a failed HTTP response.
+      console.error("Message broadcast failed:", error);
+    }
 
     return res.status(201).json({
       success: true,
       message,
     });
+
   } catch (error) {
     if (error.statusCode) {
       return res.status(error.statusCode).json({
@@ -78,7 +91,7 @@ export async function listMessages(req, res) {
   }
 
   if (before !== undefined &&
-      (typeof before !== "string" || !UUID_PATTERN.test(before))) {
+    (typeof before !== "string" || !UUID_PATTERN.test(before))) {
     return res.status(400).json({
       success: false,
       message: "Invalid message cursor",
