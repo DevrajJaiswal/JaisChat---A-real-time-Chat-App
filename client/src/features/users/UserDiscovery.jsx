@@ -47,9 +47,7 @@ export default function UserDiscovery({ onStartChat }) {
             const result = await createDirectConversation(user.id);
 
             if (!result.conversation) {
-                throw new Error(
-                    "The server did not return a conversation."
-                );
+                throw new Error("The server did not return a conversation.");
             }
 
             if (onStartChat) {
@@ -63,113 +61,140 @@ export default function UserDiscovery({ onStartChat }) {
     }
 
     return (
-        <section className="mx-auto w-full max-w-2xl p-6">
-            <header className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">
-                    JaisChat
-                </h1>
-                <p className="mt-1 text-sm text-gray-600">
-                    Find people and start a conversation.
-                </p>
-            </header>
+        <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
+            <div className="border-b border-slate-200 p-3">
+                <form onSubmit={handleSearch}>
+                    <label
+                        htmlFor="user-search"
+                        className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                        Search people
+                    </label>
 
-            <form onSubmit={handleSearch} className="flex gap-2">
-                <input
-                    type="search"
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search username or display name"
-                    aria-label="Search users"
-                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
+                    <div className="flex gap-2">
+                        <input
+                            id="user-search"
+                            type="search"
+                            value={searchTerm}
+                            onChange={(event) => setSearchTerm(event.target.value)}
+                            placeholder="Name or username"
+                            aria-label="Search users"
+                            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                        />
 
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    {loading ? "Searching..." : "Search"}
-                </button>
-            </form>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="shrink-0 rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {loading ? "Searching" : "Search"}
+                        </button>
+                    </div>
+                </form>
 
-            {error && (
-                <p role="alert" className="mt-4 text-sm text-red-600">
-                    {error}
-                </p>
-            )}
+                {error && (
+                    <p
+                        role="alert"
+                        className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
+                    >
+                        {error}
+                    </p>
+                )}
+            </div>
 
-            {loading && (
-                <p className="mt-6 text-sm text-gray-600">
-                    Searching for users...
-                </p>
-            )}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                {loading && (
+                    <p className="p-6 text-center text-sm text-slate-500">
+                        Searching for people...
+                    </p>
+                )}
 
-            {!loading && searched && users.length === 0 && (
-                <p className="mt-6 rounded-lg border border-dashed p-6 text-center text-gray-600">
-                    No users found. Try another username or display name.
-                </p>
-            )}
+                {!loading && !searched && users.length === 0 && !error && (
+                    <div className="flex min-h-56 flex-col items-center justify-center px-6 py-10 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-soft text-2xl">
+                            🔎
+                        </div>
+                        <h2 className="mt-4 font-semibold text-slate-800">
+                            Find someone to chat with
+                        </h2>
+                        <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">
+                            Search by display name or username to start a conversation.
+                        </p>
+                    </div>
+                )}
 
-            {!loading && users.length > 0 && (
-                <ul className="mt-6 divide-y divide-gray-200 rounded-lg border">
-                    {users.map((user) => {
-                        const profile = user.profile;
-                        const initials = (
-                            profile?.displayName || profile?.username || "U"
-                        )
-                            .charAt(0)
-                            .toUpperCase();
+                {!loading && searched && users.length === 0 && (
+                    <div className="px-6 py-12 text-center">
+                        <p className="font-medium text-slate-700">
+                            No people found
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Try another name or username.
+                        </p>
+                    </div>
+                )}
 
-                        return (
-                            <li
-                                key={user.id}
-                                className="flex items-center gap-3 p-4"
-                            >
-                                {profile?.avatarUrl ? (
-                                    <img
-                                        src={profile.avatarUrl}
-                                        alt=""
-                                        className="h-12 w-12 shrink-0 rounded-full object-cover"
-                                    />
-                                ) : (
-                                    <div
-                                        aria-hidden="true"
-                                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700"
-                                    >
-                                        {initials}
-                                    </div>
-                                )}
+                {!loading && users.length > 0 && (
+                    <ul className="divide-y divide-slate-100">
+                        {users.map((user) => {
+                            const profile = user.profile;
+                            const name =
+                                profile?.displayName ||
+                                profile?.username ||
+                                "User";
+                            const initials = name.charAt(0).toUpperCase();
 
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate font-semibold text-gray-900">
-                                        {profile?.displayName}
-                                    </p>
-                                    <p className="truncate text-sm text-gray-500">
-                                        @{profile?.username}
-                                    </p>
-
-                                    {profile?.about && (
-                                        <p className="mt-1 line-clamp-2 text-sm text-gray-600">
-                                            {profile.about}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <button
-                                    type="button"
-                                    disabled={startingChatId !== null}
-                                    onClick={() => handleStartChat(user)}
-                                    className="shrink-0 rounded-lg border border-blue-600 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            return (
+                                <li
+                                    key={user.id}
+                                    className="flex items-center gap-3 px-4 py-4 transition hover:bg-slate-50 sm:px-5"
                                 >
-                                    {startingChatId === user.id
-                                        ? "Starting..."
-                                        : "Start Chat"}
-                                </button>
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
+                                    {profile?.avatarUrl ? (
+                                        <img
+                                            src={profile.avatarUrl}
+                                            alt=""
+                                            className="h-12 w-12 shrink-0 rounded-full bg-slate-100 object-cover"
+                                        />
+                                    ) : (
+                                        <div
+                                            aria-hidden="true"
+                                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-soft text-base font-semibold text-text-primary"
+                                        >
+                                            {initials}
+                                        </div>
+                                    )}
+
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate font-semibold text-slate-800">
+                                            {name}
+                                        </p>
+                                        <p className="truncate text-sm text-slate-500">
+                                            @{profile?.username || "username"}
+                                        </p>
+
+                                        {profile?.about && (
+                                            <p className="mt-1 line-clamp-2 text-sm text-slate-500">
+                                                {profile.about}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        disabled={startingChatId !== null}
+                                        onClick={() => handleStartChat(user)}
+                                        className="shrink-0 rounded-xl border border-brand px-3 py-2 text-sm font-semibold bg-brand text-app transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {startingChatId === user.id
+                                            ? "Opening..."
+                                            : "Message"}
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </div>
         </section>
     );
 }

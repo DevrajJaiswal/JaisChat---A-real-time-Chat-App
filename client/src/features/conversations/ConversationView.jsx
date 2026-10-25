@@ -20,6 +20,14 @@ export default function ConversationView({
     const bottomRef = useRef(null);
 
     const conversationId = conversation?.id;
+    const otherMember = conversation?.members?.find(
+        (member) => member.userId !== currentUserId
+    );
+
+    const otherProfile = otherMember?.user?.profile;
+    const otherDisplayName = otherProfile?.displayName || "Conversation";
+    const otherUsername = otherProfile?.username;
+    const otherAvatarUrl = otherProfile?.avatarUrl;
 
     const loadMessages = useCallback(async () => {
         if (!conversationId) return;
@@ -199,26 +207,44 @@ export default function ConversationView({
     }
 
     return (
-        <section className="mx-auto flex h-[75vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border bg-white">
-            <header className="flex items-center gap-3 border-b p-4">
+        <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
+
+            <header className="z-10 flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-5">
                 <button
                     type="button"
                     onClick={onBack}
-                    className="rounded border px-3 py-1.5 text-sm"
+                    aria-label="Back to conversations"
+                    className="rounded-full p-2 text-slate-600 transition hover:bg-brand-soft hover:text-brand"
                 >
-                    Back
+                    <span aria-hidden="true">←</span>
                 </button>
 
-                <div>
-                    <h2 className="font-semibold">Conversation</h2>
-                    <p className="text-xs text-gray-500">
-                        {conversationId}
+                {otherAvatarUrl ? (
+                    <img
+                        src={otherAvatarUrl}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-full bg-slate-100 object-cover"
+                    />
+                ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand-hover">
+                        {otherDisplayName.charAt(0).toUpperCase()}
+                    </div>
+                )}
+
+                <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-sm font-semibold text-text-primary">
+                        {otherDisplayName}
+                    </h2>
+
+                    <p className="truncate text-xs text-text-secondary">
+                        {otherUsername ? `@${otherUsername}` : "JaisChat"}
                     </p>
                 </div>
             </header>
 
+
             <div
-                className="flex-1 space-y-3 overflow-y-auto bg-gray-50 p-4"
+                className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#efeae2] p-3 sm:p-5"
                 aria-live="polite"
                 aria-label="Conversation messages"
             >
@@ -242,18 +268,15 @@ export default function ConversationView({
                                     }`}
                             >
                                 <article
-                                    className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2 ${isMine
-                                        ? "bg-blue-600 text-white"
-                                        : "border bg-white text-gray-900"
+                                    className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 shadow-sm sm:max-w-[75%] ${isMine
+                                            ? "rounded-br-md bg-brand-soft text-slate-900"
+                                            : "rounded-bl-md bg-white text-slate-900"
                                         }`}
                                 >
                                     <p>{message.content}</p>
 
                                     <time
-                                        className={`mt-1 block text-right text-xs ${isMine
-                                            ? "text-blue-100"
-                                            : "text-gray-500"
-                                            }`}
+                                        className="mt-1 block text-right text-[11px] text-slate-500"
                                         dateTime={message.createdAt}
                                     >
                                         {new Date(
@@ -280,7 +303,7 @@ export default function ConversationView({
 
             <form
                 onSubmit={handleSubmit}
-                className="flex items-end gap-2 border-t p-3"
+                className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-slate-50 p-3 sm:px-5"
             >
                 <textarea
                     value={content}
@@ -299,13 +322,13 @@ export default function ConversationView({
                     aria-label="Message"
                     maxLength={4000}
                     rows={2}
-                    className="min-w-0 flex-1 resize-y rounded-lg border p-3 outline-none focus:border-blue-500"
+                    className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-brand bg-white px-4 py-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft"
                 />
 
                 <button
                     type="submit"
                     disabled={sending || !content.trim()}
-                    className="rounded-lg bg-blue-600 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="shrink-0 rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {sending ? "Sending..." : "Send"}
                 </button>
