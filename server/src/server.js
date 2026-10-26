@@ -2,8 +2,10 @@
 import "dotenv/config";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+
 import app from "./app.js";
 import { firebaseAuth } from "./config/firebase.js";
+import { prisma } from "./config/prisma.js";
 import { registerConversationSocketEvents } from "./modules/conversations/conversation.socket.js";
 import { setIO } from "./socket/socket.js";
 
@@ -20,7 +22,6 @@ const io = new Server(httpServer, {
 
 setIO(io);
 
-// Authenticate every new Socket.IO connection.
 io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
@@ -31,7 +32,6 @@ io.use(async (socket, next) => {
 
     const decodedToken = await firebaseAuth.verifyIdToken(token);
 
-    // Store verified identity on this socket.
     socket.data.auth = {
       uid: decodedToken.uid,
       phoneNumber: decodedToken.phone_number ?? null,
@@ -44,16 +44,51 @@ io.use(async (socket, next) => {
   }
 });
 
-io.on("connection", (socket) => {
-  console.log(
-    `Authenticated socket connected: ${socket.id}, user: ${socket.data.auth.uid}`
-  );
+io.on("connection", async (socket) => {
+  try {
+    const firebaseUid = socket.data?.auth?.uid;
 
-  registerConversationSocketEvents(io, socket);
+    if (!firebaseUid) {
+      console.error(
+        "Socket has no verified Firebase identity:",
+        socket.id
+      );
+      socket.disconnect(true);
+      return;
+    }
 
-  socket.on("disconnect", (reason) => {
-    console.log(`Socket disconnected: ${socket.id}`, reason);
-  });
+    const user = await prisma.user.findUnique({
+      where: { firebaseUid },
+      select: { id: true },
+    });
+
+    if (!user) {
+      console.error(
+        "No database user found for Firebase UID:",
+        firebaseUid
+      );
+      socket.disconnect(true);
+      return;
+    }
+
+    socket.data.userId = user.id;
+
+    const personalRoom = `user:${user.id}`;
+    await socket.join(personalRoom);
+
+    console.log("Socket authenticated:", socket.id);
+    console.log("Database user ID:", user.id);
+    console.log("Joined personal room:", personalRoom);
+
+    registerConversationSocketEvents(io, socket);
+
+    socket.on("disconnect", (reason) => {
+      console.log("Socket disconnected:", socket.id, reason);
+    });
+  } catch (error) {
+    console.error("Socket connection setup failed:", error);
+    socket.disconnect(true);
+  }
 });
 
 httpServer.listen(PORT, () => {

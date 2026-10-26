@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getConversations, createDirectConversation } from "./conversation.service.js";
 import { searchUsers } from "../users/user-discovery.service.js";
+import { connectSocket } from "../../lib/socket.js";
 
 function getOtherMember(conversation, currentUserId) {
     return conversation.members?.find(
@@ -93,6 +94,122 @@ export default function ConversationList({
     useEffect(() => {
         loadConversations();
     }, [loadConversations]);
+
+
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        let cancelled = false;
+        let activeSocket = null;
+
+        async function subscribeToConversationUpdates() {
+            try {
+                console.log("Connecting sidebar to conversation updates...");
+
+                const socket = await connectSocket();
+
+                if (cancelled) return;
+
+                activeSocket = socket;
+
+                function handleConversationUpdate(update) {
+                    console.log("Sidebar update received:", update);
+
+                    const { conversationId, message, updatedAt } = update ?? {};
+
+                    if (
+                        !conversationId ||
+                        !message ||
+                        message.conversationId !== conversationId
+                    ) {
+                        console.warn("Invalid sidebar update payload:", update);
+                        return;
+                    }
+
+                    setConversations((current) => {
+                        const existing = current.find(
+                            (conversation) => conversation.id === conversationId
+                        );
+
+                        if (!existing) {
+                            console.warn(
+                                "Conversation not found in sidebar:",
+                                conversationId
+                            );
+                            return current;
+                        }
+
+                        const previousMessage = existing.messages?.[0];
+
+                        if (
+                            previousMessage?.createdAt &&
+                            new Date(previousMessage.createdAt).getTime() >
+                            new Date(message.createdAt).getTime()
+                        ) {
+                            return current;
+                        }
+
+                        const updatedConversation = {
+                            ...existing,
+                            updatedAt: updatedAt || message.createdAt,
+                            messages: [message],
+                        };
+
+                        const updatedList = [
+                            updatedConversation,
+                            ...current.filter(
+                                (conversation) =>
+                                    conversation.id !== conversationId
+                            ),
+                        ];
+
+                        updatedList.sort(
+                            (a, b) =>
+                                new Date(b.updatedAt).getTime() -
+                                new Date(a.updatedAt).getTime()
+                        );
+
+                        console.log(
+                            "Conversation list reordered:",
+                            conversationId
+                        );
+
+                        return updatedList;
+                    });
+                }
+
+                socket.on(
+                    "conversation:list:update",
+                    handleConversationUpdate
+                );
+
+                console.log(
+                    "Listening for conversation:list:update. Socket connected:",
+                    socket.connected
+                );
+            } catch (error) {
+                if (!cancelled) {
+                    console.error(
+                        "Unable to subscribe to conversation list updates:",
+                        error
+                    );
+                }
+            }
+        }
+
+        subscribeToConversationUpdates();
+
+        return () => {
+            cancelled = true;
+
+            if (activeSocket) {
+                activeSocket.off(
+                    "conversation:list:update"
+                );
+            }
+        };
+    }, [currentUserId]);
+
 
     async function handleSearch(event) {
         event.preventDefault();
@@ -291,8 +408,8 @@ export default function ConversationList({
                                             isActive ? "true" : undefined
                                         }
                                         className={`flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition focus-visible:outline-2 focus-visible:outline-brand ${isActive
-                                                ? "bg-brand-soft"
-                                                : "hover:bg-slate-50"
+                                            ? "bg-brand-soft"
+                                            : "hover:bg-slate-50"
                                             }`}
                                     >
                                         {profile?.avatarUrl ? (

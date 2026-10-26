@@ -8,23 +8,34 @@ const SOCKET_URL =
 let socket = null;
 
 export async function connectSocket() {
-    const user = auth.currentUser;
-
-    if (!user) {
+    if (!auth.currentUser) {
         throw new Error("Please sign in before connecting to chat.");
     }
-
-    // Get a current Firebase ID token.
-    const token = await user.getIdToken();
 
     if (!socket) {
         socket = io(SOCKET_URL, {
             autoConnect: false,
-            auth: { token },
+            auth: async (callback) => {
+                try {
+                    const user = auth.currentUser;
+
+                    if (!user) {
+                        callback({});
+                        return;
+                    }
+
+                    const token = await user.getIdToken();
+
+                    callback({ token });
+                } catch (error) {
+                    console.error(
+                        "Unable to refresh socket token:",
+                        error
+                    );
+                    callback({});
+                }
+            },
         });
-    } else {
-        // Refresh the token supplied in the next handshake.
-        socket.auth = { token };
     }
 
     if (!socket.connected) {

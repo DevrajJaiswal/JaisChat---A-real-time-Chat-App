@@ -4,6 +4,7 @@ import {
   getConversationMessages,
 } from "./message.service.js";
 import { getIO } from "../../socket/socket.js";
+import { prisma } from "../../config/prisma.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -33,16 +34,34 @@ export async function createMessage(req, res) {
       clientMessageId,
     });
 
-    // Broadcast only after the database operation succeeds.
     try {
-      getIO()
-        .to(`conversation:${conversationId}`)
-        .emit("message:new", message);
+      const io = getIO();
+
+      io.to(`conversation:${conversationId}`).emit(
+        "message:new",
+        message
+      );
+
+      const members = await prisma.conversationMember.findMany({
+        where: { conversationId },
+        select: { userId: true },
+      });
+
+      const update = {
+        conversationId,
+        message,
+        updatedAt: message.createdAt,
+      };
+
+      for (const member of members) {
+        const room = `user:${member.userId}`;
+
+        io.to(room).emit("conversation:list:update", update);
+      }
     } catch (error) {
-      // The message is already saved. Don't turn a successful
-      // database operation into a failed HTTP response.
       console.error("Message broadcast failed:", error);
     }
+
 
     return res.status(201).json({
       success: true,
