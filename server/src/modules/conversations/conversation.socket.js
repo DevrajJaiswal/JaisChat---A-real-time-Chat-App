@@ -25,10 +25,8 @@ export function registerConversationSocketEvents(io, socket) {
                 });
             }
 
-            // Identity comes from the verified Firebase token.
             const firebaseUid = socket.data.auth.uid;
 
-            // Map the Firebase identity to our internal database user.
             const user = await prisma.user.findUnique({
                 where: { firebaseUid },
                 select: { id: true },
@@ -59,7 +57,6 @@ export function registerConversationSocketEvents(io, socket) {
                 });
             }
 
-            // Only authorized sockets can join this room.
             await socket.join(getConversationRoom(conversationId));
 
             console.log(

@@ -7,6 +7,13 @@ const SOCKET_URL =
 
 let socket = null;
 
+if (import.meta.env.DEV && typeof window !== "undefined") {
+    window.__jaischatSocket = {
+        disconnect: () => socket?.disconnect(),
+        reconnect: () => socket?.connect(),
+    };
+}
+
 export async function connectSocket() {
     if (!auth.currentUser) {
         throw new Error("Please sign in before connecting to chat.");
@@ -15,12 +22,13 @@ export async function connectSocket() {
     if (!socket) {
         socket = io(SOCKET_URL, {
             autoConnect: false,
+
             auth: async (callback) => {
                 try {
                     const user = auth.currentUser;
 
                     if (!user) {
-                        callback({});
+                        callback({ token: "" });
                         return;
                     }
 
@@ -32,9 +40,25 @@ export async function connectSocket() {
                         "Unable to refresh socket token:",
                         error
                     );
-                    callback({});
+
+                    callback({ token: "" });
                 }
             },
+        });
+
+        socket.on("connect", () => {
+            console.log("Socket connected:", socket.id);
+        });
+
+        socket.on("connect_error", (error) => {
+            console.error(
+                "Socket connection failed:",
+                error.message
+            );
+        });
+
+        socket.on("disconnect", (reason) => {
+            console.log("Socket disconnected:", reason);
         });
     }
 

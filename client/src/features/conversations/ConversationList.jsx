@@ -95,7 +95,6 @@ export default function ConversationList({
         loadConversations();
     }, [loadConversations]);
 
-
     useEffect(() => {
         if (!currentUserId) return;
 
@@ -104,40 +103,32 @@ export default function ConversationList({
 
         async function subscribeToConversationUpdates() {
             try {
-                console.log("Connecting sidebar to conversation updates...");
-
                 const socket = await connectSocket();
 
                 if (cancelled) return;
 
-                activeSocket = socket;
-
                 function handleConversationUpdate(update) {
-                    console.log("Sidebar update received:", update);
-
-                    const { conversationId, message, updatedAt } = update ?? {};
+                    const {
+                        conversationId,
+                        message,
+                        updatedAt,
+                    } = update ?? {};
 
                     if (
                         !conversationId ||
                         !message ||
                         message.conversationId !== conversationId
                     ) {
-                        console.warn("Invalid sidebar update payload:", update);
                         return;
                     }
 
                     setConversations((current) => {
                         const existing = current.find(
-                            (conversation) => conversation.id === conversationId
+                            (conversation) =>
+                                conversation.id === conversationId
                         );
 
-                        if (!existing) {
-                            console.warn(
-                                "Conversation not found in sidebar:",
-                                conversationId
-                            );
-                            return current;
-                        }
+                        if (!existing) return current;
 
                         const previousMessage = existing.messages?.[0];
 
@@ -155,27 +146,28 @@ export default function ConversationList({
                             messages: [message],
                         };
 
-                        const updatedList = [
+                        return [
                             updatedConversation,
                             ...current.filter(
                                 (conversation) =>
                                     conversation.id !== conversationId
                             ),
-                        ];
-
-                        updatedList.sort(
+                        ].sort(
                             (a, b) =>
                                 new Date(b.updatedAt).getTime() -
                                 new Date(a.updatedAt).getTime()
                         );
-
-                        console.log(
-                            "Conversation list reordered:",
-                            conversationId
-                        );
-
-                        return updatedList;
                     });
+                }
+
+                function handleSocketConnect() {
+                    if (cancelled) return;
+
+                    console.log(
+                        "Refreshing conversation list after socket connection."
+                    );
+
+                    loadConversations();
                 }
 
                 socket.on(
@@ -183,10 +175,17 @@ export default function ConversationList({
                     handleConversationUpdate
                 );
 
-                console.log(
-                    "Listening for conversation:list:update. Socket connected:",
-                    socket.connected
-                );
+                socket.on("connect", handleSocketConnect);
+
+                activeSocket = {
+                    socket,
+                    handleConversationUpdate,
+                    handleSocketConnect,
+                };
+
+                if (socket.connected) {
+                    handleSocketConnect();
+                }
             } catch (error) {
                 if (!cancelled) {
                     console.error(
@@ -203,12 +202,19 @@ export default function ConversationList({
             cancelled = true;
 
             if (activeSocket) {
-                activeSocket.off(
-                    "conversation:list:update"
+                activeSocket.socket.off(
+                    "conversation:list:update",
+                    activeSocket.handleConversationUpdate
+                );
+
+                activeSocket.socket.off(
+                    "connect",
+                    activeSocket.handleSocketConnect
                 );
             }
         };
-    }, [currentUserId]);
+    }, [currentUserId, loadConversations]);
+
 
 
     async function handleSearch(event) {

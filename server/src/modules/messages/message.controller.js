@@ -42,6 +42,11 @@ export async function createMessage(req, res) {
         message
       );
 
+      io.to(`conversation:${conversationId}`).emit(
+          "message:new",
+          message
+      );
+
       const members = await prisma.conversationMember.findMany({
         where: { conversationId },
         select: { userId: true },

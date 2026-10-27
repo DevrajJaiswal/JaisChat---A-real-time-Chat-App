@@ -6,6 +6,30 @@ import {
 } from "./message.service.js";
 import { connectSocket } from "../../lib/socket.js";
 
+function mergeMessages(existingMessages, incomingMessages) {
+    const messagesById = new Map();
+
+    for (const message of existingMessages) {
+        messagesById.set(message.id, message);
+    }
+
+    for (const message of incomingMessages) {
+        messagesById.set(message.id, message);
+    }
+
+    return [...messagesById.values()].sort((a, b) => {
+        const timeDifference =
+            new Date(a.createdAt).getTime() -
+            new Date(b.createdAt).getTime();
+
+        if (timeDifference !== 0) {
+            return timeDifference;
+        }
+
+        return String(a.id).localeCompare(String(b.id));
+    });
+}
+
 export default function ConversationView({
     conversation,
     currentUserId,
@@ -18,6 +42,8 @@ export default function ConversationView({
     const [error, setError] = useState("");
 
     const bottomRef = useRef(null);
+    const lastSyncedSocketIdRef = useRef(null);
+
     const conversationId = conversation?.id;
 
     const otherMember = conversation?.members?.find(
@@ -25,8 +51,11 @@ export default function ConversationView({
     );
 
     const profile = otherMember?.user?.profile;
+
     const displayName =
-        profile?.displayName || profile?.username || "Conversation";
+        profile?.displayName ||
+        profile?.username ||
+        "Conversation";
 
     const loadMessages = useCallback(async () => {
         if (!conversationId) {
@@ -35,33 +64,91 @@ export default function ConversationView({
             return;
         }
 
-        setLoading(true);
-        setError("");
-
         try {
-            const result = await getConversationMessages(conversationId);
-            setMessages(result.messages ?? []);
+            setError("");
+
+            const result =
+                await getConversationMessages(conversationId);
+
+            const fetchedMessages = result.messages ?? [];
+
+            setMessages((previousMessages) =>
+                mergeMessages(previousMessages, fetchedMessages)
+            );
         } catch (err) {
-            setError(err.message || "Unable to load messages.");
+            console.error("Unable to load messages:", err);
+
+            setError(
+                err.message || "Unable to load messages."
+            );
         } finally {
             setLoading(false);
         }
     }, [conversationId]);
 
+    // Load message history whenever the selected conversation changes.
     useEffect(() => {
-        loadMessages();
-    }, [loadMessages]);
+        let cancelled = false;
+
+        setMessages([]);
+        setLoading(true);
+        setError("");
+        lastSyncedSocketIdRef.current = null;
+
+        async function fetchMessages() {
+            if (!conversationId) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const result =
+                    await getConversationMessages(conversationId);
+
+                if (!cancelled) {
+                    setMessages(result.messages ?? []);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    console.error(
+                        "Unable to load conversation history:",
+                        err
+                    );
+
+                    setError(
+                        err.message ||
+                        "Unable to load messages."
+                    );
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        fetchMessages();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [conversationId]);
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        bottomRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "end",
+        });
     }, [messages]);
 
+    // Subscribe to real-time messages and recover after reconnection.
     useEffect(() => {
         if (!conversationId) return;
 
         let cancelled = false;
-        let activeSocket;
-        let handleNewMessage;
+        let activeSocket = null;
+        let handleNewMessage = null;
+        let handleConnect = null;
 
         async function subscribe() {
             try {
@@ -72,34 +159,89 @@ export default function ConversationView({
                 activeSocket = socket;
 
                 handleNewMessage = (message) => {
-                    if (message.conversationId !== conversationId) return;
+                    if (
+                        message.conversationId !== conversationId
+                    ) {
+                        return;
+                    }
 
-                    setMessages((previous) => {
-                        if (previous.some((item) => item.id === message.id)) {
-                            return previous;
-                        }
+                    console.log(
+                        "Received message:new:",
+                        message.id
+                    );
 
-                        return [...previous, message];
-                    });
+                    setMessages((previousMessages) =>
+                        mergeMessages(previousMessages, [message])
+                    );
                 };
 
-                socket.on("message:new", handleNewMessage);
+                handleConnect = () => {
+                    synchronizeConnection();
+                };
 
-                socket.emit(
-                    "conversation:join",
-                    { conversationId },
-                    (result) => {
-                        if (!cancelled && !result?.success) {
-                            console.error(
-                                "Unable to join conversation:",
-                                result?.message
-                            );
-                        }
+                async function synchronizeConnection() {
+                    if (cancelled || !socket.connected) {
+                        return;
                     }
-                );
+
+                    if (
+                        lastSyncedSocketIdRef.current === socket.id
+                    ) {
+                        return;
+                    }
+
+                    lastSyncedSocketIdRef.current = socket.id;
+
+                    console.log(
+                        "Synchronizing conversation after connection:",
+                        conversationId,
+                        "Socket:",
+                        socket.id
+                    );
+
+                    socket.emit(
+                        "conversation:join",
+                        { conversationId },
+                        async (result) => {
+                            if (cancelled) return;
+
+                            if (!result?.success) {
+                                console.error(
+                                    "Unable to join conversation:",
+                                    result?.message ||
+                                    "No successful acknowledgement received."
+                                );
+
+                                // Permit another attempt on a future connect.
+                                lastSyncedSocketIdRef.current = null;
+                                return;
+                            }
+
+                            console.log(
+                                "Joined conversation room:",
+                                conversationId
+                            );
+
+                            // Recover messages that may have arrived while
+                            // this client was disconnected.
+                            await loadMessages();
+                        }
+                    );
+                }
+
+                // Register the listener before joining the room.
+                socket.on("message:new", handleNewMessage);
+                socket.on("connect", handleConnect);
+
+                if (socket.connected) {
+                    await synchronizeConnection();
+                }
             } catch (err) {
                 if (!cancelled) {
-                    console.error("Unable to subscribe to messages:", err);
+                    console.error(
+                        "Unable to subscribe to conversation:",
+                        err
+                    );
                 }
             }
         }
@@ -111,7 +253,14 @@ export default function ConversationView({
 
             if (activeSocket) {
                 if (handleNewMessage) {
-                    activeSocket.off("message:new", handleNewMessage);
+                    activeSocket.off(
+                        "message:new",
+                        handleNewMessage
+                    );
+                }
+
+                if (handleConnect) {
+                    activeSocket.off("connect", handleConnect);
                 }
 
                 if (activeSocket.connected) {
@@ -121,17 +270,14 @@ export default function ConversationView({
                 }
             }
         };
-    }, [conversationId]);
+    }, [conversationId, loadMessages]);
 
     async function handleSubmit(event) {
         event.preventDefault();
 
-        const text = content.trim();
+        const trimmedContent = content.trim();
 
-        if (!text || sending || !conversationId) return;
-
-        if (text.length > 4000) {
-            setError("Messages cannot exceed 4000 characters.");
+        if (!trimmedContent || sending || !conversationId) {
             return;
         }
 
@@ -141,125 +287,139 @@ export default function ConversationView({
         try {
             const result = await sendConversationMessage(
                 conversationId,
-                text,
-                crypto.randomUUID()
+                trimmedContent
             );
 
-            setMessages((previous) => {
-                if (previous.some((item) => item.id === result.message.id)) {
-                    return previous;
-                }
+            const sentMessage = result.message ?? result;
 
-                return [...previous, result.message];
-            });
+            if (sentMessage?.id) {
+                setMessages((previousMessages) =>
+                    mergeMessages(previousMessages, [sentMessage])
+                );
+            }
 
             setContent("");
         } catch (err) {
-            setError(err.message || "Unable to send message.");
+            console.error("Unable to send message:", err);
+
+            setError(
+                err.message || "Unable to send message."
+            );
         } finally {
             setSending(false);
         }
     }
 
     return (
-        <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-            <header className="flex h-[66px] shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4">
-                <button
-                    type="button"
-                    onClick={onBack}
-                    aria-label="Back to conversations"
-                    className="rounded-full p-2 text-slate-600 transition hover:bg-brand-soft hover:text-brand md:hidden"
-                >
-                    <span aria-hidden="true">←</span>
-                </button>
-
-                {profile?.avatarUrl ? (
-                    <img
-                        src={profile.avatarUrl}
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded-full object-cover"
-                    />
-                ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand-hover">
-                        {displayName.charAt(0).toUpperCase()}
-                    </div>
+        <section className="flex h-full min-h-0 flex-col bg-app">
+            {/* Conversation header */}
+            <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-surface px-4 py-3">
+                {onBack && (
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="rounded-lg p-2 text-text-secondary hover:bg-gray-100 md:hidden"
+                        aria-label="Back to conversations"
+                    >
+                        ←
+                    </button>
                 )}
 
-                <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-sm font-semibold text-text-primary">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft font-semibold text-brand">
+                    {displayName.charAt(0).toUpperCase()}
+                </div>
+
+                <div className="min-w-0">
+                    <h2 className="truncate font-semibold text-text-primary">
                         {displayName}
                     </h2>
                     <p className="truncate text-xs text-text-secondary">
-                        {profile?.username ? `@${profile.username}` : "JaisChat"}
+                        {profile?.username
+                            ? `@${profile.username}`
+                            : "JaisChat"}
                     </p>
                 </div>
             </header>
 
-            <div
-                className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#efeae2] p-3 sm:p-5"
-                aria-live="polite"
-                aria-label="Conversation messages"
-            >
-                {loading ? (
-                    <p className="text-center text-sm text-gray-500">
+            {/* Messages */}
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+                {loading && messages.length === 0 && (
+                    <p className="text-center text-sm text-text-secondary">
                         Loading messages...
                     </p>
-                ) : messages.length === 0 ? (
-                    <p className="pt-8 text-center text-sm text-gray-500">
-                        No messages yet. Say hello!
-                    </p>
-                ) : (
-                    messages.map((message) => {
-                        const isMine = message.senderId === currentUserId;
+                )}
 
-                        return (
-                            <div
-                                key={message.id}
-                                className={`flex ${
-                                    isMine ? "justify-end" : "justify-start"
+                {!loading && messages.length === 0 && (
+                    <p className="m-auto text-center text-sm text-text-secondary">
+                        No messages yet. Start the conversation!
+                    </p>
+                )}
+
+                {messages.map((message) => {
+                    const isOwnMessage =
+                        message.senderId === currentUserId;
+
+                    return (
+                        <div
+                            key={message.id}
+                            className={`flex ${isOwnMessage
+                                ? "justify-end"
+                                : "justify-start"
                                 }`}
-                            >
-                                <article
-                                    className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 shadow-sm sm:max-w-[75%] ${
-                                        isMine
-                                            ? "rounded-br-md bg-brand-soft text-slate-900"
-                                            : "rounded-bl-md bg-white text-slate-900"
+                        >
+                            <div
+                                className={`max-w-[85%] break-words rounded-2xl px-4 py-2 sm:max-w-[75%] ${isOwnMessage
+                                    ? "rounded-br-sm bg-brand text-white"
+                                    : "rounded-bl-sm border border-gray-200 bg-surface text-text-primary"
                                     }`}
+                            >
+                                <p className="whitespace-pre-wrap text-sm">
+                                    {message.content}
+                                </p>
+
+                                <p
+                                    className={`mt-1 text-right text-[10px] ${isOwnMessage
+                                        ? "text-white/80"
+                                        : "text-text-secondary"
+                                        }`}
                                 >
-                                    <p>{message.content}</p>
-                                    <time
-                                        className="mt-1 block text-right text-[11px] text-slate-500"
-                                        dateTime={message.createdAt}
-                                    >
-                                        {new Date(
+                                    {message.createdAt
+                                        ? new Date(
                                             message.createdAt
                                         ).toLocaleTimeString([], {
                                             hour: "2-digit",
                                             minute: "2-digit",
-                                        })}
-                                    </time>
-                                </article>
+                                        })
+                                        : ""}
+                                </p>
                             </div>
-                        );
-                    })
-                )}
+                        </div>
+                    );
+                })}
 
                 <div ref={bottomRef} />
             </div>
 
+            {/* Error message */}
             {error && (
-                <p role="alert" className="border-t px-4 py-2 text-sm text-red-600">
+                <p
+                    role="alert"
+                    className="shrink-0 px-4 py-2 text-sm text-red-600"
+                >
                     {error}
                 </p>
             )}
 
+            {/* Message input */}
             <form
                 onSubmit={handleSubmit}
-                className="flex shrink-0 items-end gap-2 border-t border-slate-200 bg-slate-50 p-3 sm:px-5"
+                className="flex shrink-0 items-end gap-2 border-t border-gray-200 bg-surface p-3 sm:p-4"
             >
                 <textarea
                     value={content}
-                    onChange={(event) => setContent(event.target.value)}
+                    onChange={(event) =>
+                        setContent(event.target.value)
+                    }
                     onKeyDown={(event) => {
                         if (
                             event.key === "Enter" &&
@@ -271,16 +431,21 @@ export default function ConversationView({
                         }
                     }}
                     placeholder="Type a message..."
-                    aria-label="Message"
+                    rows={1}
                     maxLength={4000}
-                    rows={2}
-                    className="max-h-32 min-w-0 flex-1 resize-none rounded-2xl border border-brand bg-white px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-brand-soft"
+                    className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-text-primary outline-none focus:border-brand"
+                    aria-label="Message"
+                    disabled={sending || !conversationId}
                 />
 
                 <button
                     type="submit"
-                    disabled={sending || !content.trim()}
-                    className="shrink-0 rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={
+                        sending ||
+                        !content.trim() ||
+                        !conversationId
+                    }
+                    className="shrink-0 rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {sending ? "Sending..." : "Send"}
                 </button>
